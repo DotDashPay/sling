@@ -612,10 +612,13 @@ func TestDo_onSuccess(t *testing.T) {
 
 	model := new(FakeModel)
 	apiError := new(APIError)
-	resp, err := sling.Do(req, model, apiError)
+	resp, raw, err := sling.Do(req, model, apiError)
 
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
+	}
+	if len(raw) == 0 {
+		t.Errorf("expected non-empty raw respnse")
 	}
 	if resp.StatusCode != 200 {
 		t.Errorf("expected %d, got %d", 200, resp.StatusCode)
@@ -640,10 +643,13 @@ func TestDo_onSuccessWithNilValue(t *testing.T) {
 	req, _ := http.NewRequest("GET", "http://example.com/success", nil)
 
 	apiError := new(APIError)
-	resp, err := sling.Do(req, nil, apiError)
+	resp, raw, err := sling.Do(req, nil, apiError)
 
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
+	}
+	if len(raw) != 0 {
+		t.Errorf("expected empty raw respnse, got %v", raw)
 	}
 	if resp.StatusCode != 200 {
 		t.Errorf("expected %d, got %d", 200, resp.StatusCode)
@@ -671,10 +677,13 @@ func TestDo_onFailure(t *testing.T) {
 
 	model := new(FakeModel)
 	apiError := new(APIError)
-	resp, err := sling.Do(req, model, apiError)
+	resp, raw, err := sling.Do(req, model, apiError)
 
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
+	}
+	if len(raw) == 0 {
+		t.Errorf("expected non-empty raw respnse")
 	}
 	if resp.StatusCode != 400 {
 		t.Errorf("expected %d, got %d", 400, resp.StatusCode)
@@ -700,10 +709,13 @@ func TestDo_onFailureWithNilValue(t *testing.T) {
 	req, _ := http.NewRequest("GET", "http://example.com/failure", nil)
 
 	model := new(FakeModel)
-	resp, err := sling.Do(req, model, nil)
+	resp, raw, err := sling.Do(req, model, nil)
 
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
+	}
+	if len(raw) != 0 {
+		t.Errorf("expected empty raw respnse, got %v", raw)
 	}
 	if resp.StatusCode != 420 {
 		t.Errorf("expected %d, got %d", 420, resp.StatusCode)
@@ -750,10 +762,13 @@ func TestReceive_success(t *testing.T) {
 	params := FakeParams{KindName: "vanilla", Count: 11}
 	model := new(FakeModel)
 	apiError := new(APIError)
-	resp, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive(model, apiError)
+	resp, raw, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive(model, apiError)
 
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
+	}
+	if len(raw) == 0 {
+		t.Errorf("expected non-empty raw respnse")
 	}
 	if resp.StatusCode != 200 {
 		t.Errorf("expected %d, got %d", 200, resp.StatusCode)
@@ -785,10 +800,13 @@ func TestReceive_failure(t *testing.T) {
 	params := FakeParams{KindName: "vanilla", Count: 11}
 	model := new(FakeModel)
 	apiError := new(APIError)
-	resp, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive(model, apiError)
+	resp, raw, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive(model, apiError)
 
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
+	}
+	if len(raw) == 0 {
+		t.Errorf("expected non-empty raw respnse")
 	}
 	if resp.StatusCode != 429 {
 		t.Errorf("expected %d, got %d", 429, resp.StatusCode)
@@ -805,9 +823,12 @@ func TestReceive_failure(t *testing.T) {
 
 func TestReceive_errorCreatingRequest(t *testing.T) {
 	expectedErr := errors.New("json: unsupported value: +Inf")
-	resp, err := New().BodyJSON(FakeModel{Temperature: math.Inf(1)}).Receive(nil, nil)
+	resp, raw, err := New().BodyJSON(FakeModel{Temperature: math.Inf(1)}).Receive(nil, nil)
 	if err == nil || err.Error() != expectedErr.Error() {
 		t.Errorf("expected %v, got %v", expectedErr, err)
+	}
+	if len(raw) != 0 {
+		t.Errorf("expected empty raw respnse, got %v", raw)
 	}
 	if resp != nil {
 		t.Errorf("expected nil resp, got %v", resp)
