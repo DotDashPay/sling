@@ -50,10 +50,15 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func parse(rawurl string) *url.URL {
+	a, _ := url.Parse(rawurl)
+	return a
+}
+
 func TestSlingNew(t *testing.T) {
 	cases := []*Sling{
-		&Sling{httpClient: &http.Client{}, method: "GET", rawURL: "http://example.com"},
-		&Sling{httpClient: nil, method: "", rawURL: "http://example.com"},
+		&Sling{httpClient: &http.Client{}, method: "GET", baseURL: parse("http://example.com")},
+		&Sling{httpClient: nil, method: "", baseURL: parse("http://example.com")},
 		&Sling{queryStructs: make([]interface{}, 0)},
 		&Sling{queryStructs: []interface{}{paramsA}},
 		&Sling{queryStructs: []interface{}{paramsA, paramsB}},
@@ -74,8 +79,8 @@ func TestSlingNew(t *testing.T) {
 		if child.method != sling.method {
 			t.Errorf("expected %s, got %s", sling.method, child.method)
 		}
-		if child.rawURL != sling.rawURL {
-			t.Errorf("expected %s, got %s", sling.rawURL, child.rawURL)
+		if child.GetURL() != sling.GetURL() {
+			t.Errorf("expected %s, got %s", sling.GetURL(), child.GetURL())
 		}
 		// Header should be a copy of parent Sling header. For example, calling
 		// baseSling.Add("k","v") should not mutate previously created child Slings
@@ -148,8 +153,8 @@ func TestBaseSetter(t *testing.T) {
 	cases := []string{"http://a.io/", "http://b.io", "/path", "path", ""}
 	for _, base := range cases {
 		sling := New().Base(base)
-		if sling.rawURL != base {
-			t.Errorf("expected %s, got %s", base, sling.rawURL)
+		if sling.GetURL() != base {
+			t.Errorf("expected %s, got %s", base, sling.GetURL())
 		}
 	}
 }
@@ -180,8 +185,8 @@ func TestPathSetter(t *testing.T) {
 	}
 	for _, c := range cases {
 		sling := New().Base(c.rawURL).Path(c.path)
-		if sling.rawURL != c.expectedRawURL {
-			t.Errorf("expected %s, got %s", c.expectedRawURL, sling.rawURL)
+		if sling.GetURL() != c.expectedRawURL {
+			t.Errorf("expected %s, got %s", c.expectedRawURL, sling.GetURL())
 		}
 	}
 }

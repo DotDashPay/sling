@@ -32,8 +32,10 @@ type Sling struct {
 	httpClient Doer
 	// HTTP method (GET, POST, etc.)
 	method string
-	// raw url string for requests
-	rawURL string
+	// parsed url string for requests
+	baseURL *url.URL
+	// parsed url string for requests
+	pathURL *url.URL
 	// stores key-values pairs to add to request's Headers
 	header http.Header
 	// url tagged query structs
@@ -77,7 +79,8 @@ func (s *Sling) New() *Sling {
 	return &Sling{
 		httpClient:   s.httpClient,
 		method:       s.method,
-		rawURL:       s.rawURL,
+		baseURL:      s.baseURL,
+		pathURL:      s.pathURL,
 		header:       headerCopy,
 		queryStructs: append([]interface{}{}, s.queryStructs...),
 		bodyJSON:     s.bodyJSON,
@@ -178,21 +181,21 @@ func basicAuth(username, password string) string {
 
 // Url
 
-// Base sets the rawURL. If you intend to extend the url with Path,
+// Base sets the baseURL. If you intend to extend the url with Path,
 // baseUrl should be specified with a trailing slash.
-func (s *Sling) Base(rawURL string) *Sling {
-	s.rawURL = rawURL
+func (s *Sling) Base(baseURL string) *Sling {
+	s.baseURL, _ = url.Parse(baseURL)
 	return s
 }
 
-// Path extends the rawURL with the given path by resolving the reference to
-// an absolute URL. If parsing errors occur, the rawURL is left unmodified.
+// Path extends the baseURL with the given path by resolving the reference to
+// an absolute URL.
 func (s *Sling) Path(path string) *Sling {
-	baseURL, baseErr := url.Parse(s.rawURL)
-	pathURL, pathErr := url.Parse(path)
-	if baseErr == nil && pathErr == nil {
-		s.rawURL = baseURL.ResolveReference(pathURL).String()
-		return s
+	pathURL, _ := url.Parse(path)
+	if s.pathURL != nil {
+		s.pathURL = s.pathURL.ResolveReference(pathURL)
+	} else {
+		s.pathURL = pathURL
 	}
 	return s
 }
@@ -250,13 +253,17 @@ func (s *Sling) Body(body io.Reader) *Sling {
 	return s
 }
 
+func (s *Sling) GetURL() string {
+	return s.baseURL.ResolveReference(s.pathURL).String()
+}
+
 // Requests
 
 // Request returns a new http.Request created with the Sling properties.
 // Returns any errors parsing the rawURL, encoding query structs, encoding
 // the body, or creating the http.Request.
 func (s *Sling) Request() (*http.Request, error) {
-	reqURL, err := url.Parse(s.rawURL)
+	reqURL, err := url.Parse(s.GetURL())
 	if err != nil {
 		return nil, err
 	}
