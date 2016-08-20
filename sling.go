@@ -254,7 +254,15 @@ func (s *Sling) Body(body io.Reader) *Sling {
 }
 
 func (s *Sling) GetURL() string {
-	return s.baseURL.ResolveReference(s.pathURL).String()
+	if s.baseURL != nil {
+		if s.pathURL != nil {
+			return s.baseURL.ResolveReference(s.pathURL).String()
+		}
+		return s.baseURL.String()
+	} else if s.pathURL != nil {
+		return s.pathURL.String()
+	}
+	return ""
 }
 
 // Requests
@@ -363,68 +371,39 @@ func addHeaders(req *http.Request, header http.Header) {
 
 // Sending
 
-// ReceiveSuccess creates a new HTTP request and returns the response. Success
-// responses (2XX) are JSON decoded into the value pointed to by successV.
-// Any error creating the request, sending it, or decoding a 2XX response
-// is returned.
-func (s *Sling) ReceiveSuccess(successV interface{}) (*http.Response, []byte, error) {
-	return s.Receive(successV, nil)
-}
-
-// Receive creates a new HTTP request and returns the response. Success
-// responses (2XX) are JSON decoded into the value pointed to by successV and
-// other responses are JSON decoded into the value pointed to by failureV.
-// Any error creating the request, sending it, or decoding the response is
-// returned.
+// Receive creates a new HTTP request and returns the response.
+// Responses are JSON decoded into the value pointed to by v.
+// Any error creating the request, sending it, or decoding the response is returned.
 // Receive is shorthand for calling Request and Do.
-func (s *Sling) Receive(successV, failureV interface{}) (*http.Response, []byte, error) {
+func (s *Sling) Receive(v interface{}) ([]byte, *http.Response, error) {
 	req, err := s.Request()
 	if err != nil {
 		return nil, nil, err
 	}
-	return s.Do(req, successV, failureV)
+	return s.Do(req, v)
 }
 
-// Do sends an HTTP request and returns the response. Success responses (2XX)
-// are JSON decoded into the value pointed to by successV and other responses
-// are JSON decoded into the value pointed to by failureV.
+// Do sends an HTTP request and returns the response. Responses
+// are JSON decoded into the value pointed to by v.
 // Any error sending the request or decoding the response is returned.
-func (s *Sling) Do(req *http.Request, successV, failureV interface{}) (resp *http.Response, raw []byte, err error) {
+func (s *Sling) Do(req *http.Request, v interface{}) (rawResponse []byte, resp *http.Response, err error) {
 	resp, err = s.httpClient.Do(req)
 	if err != nil {
-		return resp, nil, err
+		return nil, resp, err
 	}
 	// when err is nil, resp contains a non-nil resp.Body which must be closed
 	defer resp.Body.Close()
 	if strings.Contains(resp.Header.Get(contentType), jsonContentType) {
-		raw, err = decodeResponseJSON(resp, successV, failureV)
+		rawResponse, err = decodeResponseBodyJSON(resp, v)
 	}
-	return resp, raw, err
-}
-
-// decodeResponse decodes response Body into the value pointed to by successV
-// if the response is a success (2XX) or into the value pointed to by failureV
-// otherwise. If the successV or failureV argument to decode into is nil,
-// decoding is skipped.
-// Caller is responsible for closing the resp.Body.
-func decodeResponseJSON(resp *http.Response, successV, failureV interface{}) ([]byte, error) {
-	if code := resp.StatusCode; 200 <= code && code <= 299 {
-		if successV != nil {
-			return decodeResponseBodyJSON(resp, successV)
-		}
-	} else {
-		if failureV != nil {
-			return decodeResponseBodyJSON(resp, failureV)
-		}
-	}
-	return nil, nil
+	return
 }
 
 // decodeResponseBodyJSON JSON decodes a Response Body into the value pointed
 // to by v.
 // Caller must provide a non-nil v and close the resp.Body.
-func decodeResponseBodyJSON(resp *http.Response, v interface{}) ([]byte, error) {
+func decodeResponseBodyJSON(resp *http.Response, v interface{}) (rawResponse []byte, err error) {
 	defer resp.Body.Close()
-	bufBytes, _ := ioutil.ReadAll(resp.Body)
-	return bufBytes, json.Unmarshal(bufBytes, v)
+	rawResponse, _ = ioutil.ReadAll(resp.Body)
+	return rawResponse, json.Unmarshal(rawResponse, v)
 }
