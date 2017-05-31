@@ -372,38 +372,28 @@ func addHeaders(req *http.Request, header http.Header) {
 // Sending
 
 // Receive creates a new HTTP request and returns the response.
-// Responses are JSON decoded into the value pointed to by v.
 // Any error creating the request, sending it, or decoding the response is returned.
 // Receive is shorthand for calling Request and Do.
-func (s *Sling) Receive(v interface{}) ([]byte, *http.Response, error) {
+func (s *Sling) Receive() (response []byte, httpResponse *http.Response, err error) {
 	req, err := s.Request()
 	if err != nil {
 		return nil, nil, err
 	}
-	return s.Do(req, v)
+	return s.Do(req)
 }
 
-// Do sends an HTTP request and returns the response. Responses
-// are JSON decoded into the value pointed to by v.
+// Do sends an HTTP request and returns the response.
 // Any error sending the request or decoding the response is returned.
-func (s *Sling) Do(req *http.Request, v interface{}) (rawResponse []byte, resp *http.Response, err error) {
-	resp, err = s.httpClient.Do(req)
-	if err != nil {
-		return nil, resp, err
+func (s *Sling) Do(req *http.Request) (response []byte, httpResponse *http.Response, err error) {
+	if httpResponse, err = s.httpClient.Do(req); err != nil {
+		response = nil
+		return
 	}
-	// when err is nil, resp contains a non-nil resp.Body which must be closed
-	defer resp.Body.Close()
-	if strings.Contains(resp.Header.Get(contentType), jsonContentType) {
-		rawResponse, err = decodeResponseBodyJSON(resp, v)
+	// httpResponse contains a non-nil resp.Body which must be closed
+	defer httpResponse.Body.Close()
+	if response, err = ioutil.ReadAll(httpResponse.Body); err != nil {
+		response = nil
+		return
 	}
 	return
-}
-
-// decodeResponseBodyJSON JSON decodes a Response Body into the value pointed
-// to by v.
-// Caller must provide a non-nil v and close the resp.Body.
-func decodeResponseBodyJSON(resp *http.Response, v interface{}) (rawResponse []byte, err error) {
-	defer resp.Body.Close()
-	rawResponse, _ = ioutil.ReadAll(resp.Body)
-	return rawResponse, json.Unmarshal(rawResponse, v)
 }

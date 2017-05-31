@@ -2,6 +2,7 @@ package sling
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -615,18 +616,23 @@ func TestDo_onSuccess(t *testing.T) {
 	sling := New().Client(client)
 	req, _ := http.NewRequest("GET", "http://example.com/success", nil)
 
-	model := new(FakeModel)
-	raw, resp, err := sling.Do(req, model)
-
+	response, httpResponse, err := sling.Do(req)
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	if len(raw) == 0 {
-		t.Errorf("expected non-empty raw response")
+	if len(response) == 0 {
+		t.Errorf("expected non-empty response response")
 	}
-	if resp.StatusCode != 200 {
-		t.Errorf("expected %d, got %d", 200, resp.StatusCode)
+	if httpResponse.StatusCode != 200 {
+		t.Errorf("expected %d, got %d", 200, httpResponse.StatusCode)
 	}
+
+	model := new(FakeModel)
+	err = json.Unmarshal(response, model)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
 	if model.Text != expectedText {
 		t.Errorf("expected %s, got %s", expectedText, model.Text)
 	}
@@ -646,18 +652,23 @@ func TestDo_onSuccessWithNilValue(t *testing.T) {
 	sling := New().Client(client)
 	req, _ := http.NewRequest("GET", "http://example.com/success", nil)
 
-	apiError := new(APIError)
-	rawResponse, resp, err := sling.Do(req, apiError)
-
+	response, httpResponse, err := sling.Do(req)
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	if len(rawResponse) == 0 {
-		t.Errorf("expected non-empty raw response")
+	if len(response) == 0 {
+		t.Errorf("expected non-empty response response")
 	}
-	if resp.StatusCode != 200 {
-		t.Errorf("expected %d, got %d", 200, resp.StatusCode)
+	if httpResponse.StatusCode != 200 {
+		t.Errorf("expected %d, got %d", 200, httpResponse.StatusCode)
 	}
+
+	apiError := new(APIError)
+	err = json.Unmarshal(response, apiError)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
 	expected := &APIError{}
 	if !reflect.DeepEqual(expected, apiError) {
 		t.Errorf("failureV should not be populated, exepcted %v, got %v", expected, apiError)
@@ -679,18 +690,23 @@ func TestDo_onFailure(t *testing.T) {
 	sling := New().Client(client)
 	req, _ := http.NewRequest("GET", "http://example.com/failure", nil)
 
-	apiError := new(APIError)
-	raw, resp, err := sling.Do(req, apiError)
-
+	response, httpResponse, err := sling.Do(req)
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	if len(raw) == 0 {
-		t.Errorf("expected non-empty raw response")
+	if len(response) == 0 {
+		t.Errorf("expected non-empty response response")
 	}
-	if resp.StatusCode != 400 {
-		t.Errorf("expected %d, got %d", 400, resp.StatusCode)
+	if httpResponse.StatusCode != 400 {
+		t.Errorf("expected %d, got %d", 400, httpResponse.StatusCode)
 	}
+
+	apiError := new(APIError)
+	err = json.Unmarshal(response, apiError)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
 	if apiError.Message != expectedMessage {
 		t.Errorf("expected %s, got %s", expectedMessage, apiError.Message)
 	}
@@ -711,41 +727,26 @@ func TestDo_onFailureWithNilValue(t *testing.T) {
 	sling := New().Client(client)
 	req, _ := http.NewRequest("GET", "http://example.com/failure", nil)
 
-	model := new(FakeModel)
-	rawResponse, resp, err := sling.Do(req, model)
-
+	response, httpResponse, err := sling.Do(req)
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	if len(rawResponse) == 0 {
-		t.Errorf("expected non-empty raw response")
+	if len(response) == 0 {
+		t.Errorf("expected non-empty response response")
 	}
-	if resp.StatusCode != 420 {
-		t.Errorf("expected %d, got %d", 420, resp.StatusCode)
+	if httpResponse.StatusCode != 420 {
+		t.Errorf("expected %d, got %d", 420, httpResponse.StatusCode)
 	}
+
+	model := new(FakeModel)
+	err = json.Unmarshal(response, model)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
 	expected := &FakeModel{}
 	if !reflect.DeepEqual(expected, model) {
 		t.Errorf("successV should not be populated, exepcted %v, got %v", expected, model)
-	}
-}
-
-func TestDo_skipDecodingIfContentTypeWrong(t *testing.T) {
-	client, mux, server := testServer()
-	defer server.Close()
-	mux.HandleFunc("/success", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprintf(w, `{"text": "Some text", "favorite_count": 24}`)
-	})
-
-	sling := New().Client(client)
-	req, _ := http.NewRequest("GET", "http://example.com/success", nil)
-
-	model := new(FakeModel)
-	sling.Do(req, model)
-
-	expectedModel := &FakeModel{}
-	if !reflect.DeepEqual(expectedModel, model) {
-		t.Errorf("decoding should have been skipped, Content-Type was incorrect")
 	}
 }
 
@@ -763,18 +764,23 @@ func TestReceive_success(t *testing.T) {
 	endpoint := New().Client(client).Base("http://example.com/").Path("foo/").Post("submit")
 	// encode url-tagged struct in query params and as post body for testing purposes
 	params := FakeParams{KindName: "vanilla", Count: 11}
-	model := new(FakeModel)
-	raw, resp, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive(model)
-
+	response, httpResponse, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive()
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	if len(raw) == 0 {
-		t.Errorf("expected non-empty raw response")
+	if len(response) == 0 {
+		t.Errorf("expected non-empty response response")
 	}
-	if resp.StatusCode != 200 {
-		t.Errorf("expected %d, got %d", 200, resp.StatusCode)
+	if httpResponse.StatusCode != 200 {
+		t.Errorf("expected %d, got %d", 200, httpResponse.StatusCode)
 	}
+
+	model := new(FakeModel)
+	err = json.Unmarshal(response, model)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
 	expectedModel := &FakeModel{Text: "Some text", FavoriteCount: 24}
 	if !reflect.DeepEqual(expectedModel, model) {
 		t.Errorf("expected %v, got %v", expectedModel, model)
@@ -796,18 +802,23 @@ func TestReceive_failure(t *testing.T) {
 	endpoint := New().Client(client).Base("http://example.com/").Path("foo/").Post("submit")
 	// encode url-tagged struct in query params and as post body for testing purposes
 	params := FakeParams{KindName: "vanilla", Count: 11}
-	apiError := new(APIError)
-	raw, resp, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive(apiError)
-
+	response, httpResponse, err := endpoint.New().QueryStruct(params).BodyForm(params).Receive()
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	if len(raw) == 0 {
-		t.Errorf("expected non-empty raw response")
+	if len(response) == 0 {
+		t.Errorf("expected non-empty response response")
 	}
-	if resp.StatusCode != 429 {
-		t.Errorf("expected %d, got %d", 429, resp.StatusCode)
+	if httpResponse.StatusCode != 429 {
+		t.Errorf("expected %d, got %d", 429, httpResponse.StatusCode)
 	}
+
+	apiError := new(APIError)
+	err = json.Unmarshal(response, apiError)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+
 	expectedAPIError := &APIError{Message: "Rate limit exceeded", Code: 88}
 	if !reflect.DeepEqual(expectedAPIError, apiError) {
 		t.Errorf("expected %v, got %v", expectedAPIError, apiError)
@@ -816,15 +827,15 @@ func TestReceive_failure(t *testing.T) {
 
 func TestReceive_errorCreatingRequest(t *testing.T) {
 	expectedErr := errors.New("json: unsupported value: +Inf")
-	raw, resp, err := New().BodyJSON(FakeModel{Temperature: math.Inf(1)}).Receive(nil)
+	response, httpResponse, err := New().BodyJSON(FakeModel{Temperature: math.Inf(1)}).Receive()
 	if err == nil || err.Error() != expectedErr.Error() {
 		t.Errorf("expected %v, got %v", expectedErr, err)
 	}
-	if len(raw) != 0 {
-		t.Errorf("expected empty raw response, got %v", raw)
+	if len(response) != 0 {
+		t.Errorf("expected empty response response, got %v", response)
 	}
-	if resp != nil {
-		t.Errorf("expected nil resp, got %v", resp)
+	if httpResponse != nil {
+		t.Errorf("expected nil httpResponse, got %v", httpResponse)
 	}
 }
 
